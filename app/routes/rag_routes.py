@@ -1,37 +1,79 @@
 from fastapi import APIRouter
+
 from rag.embedding import (
-    search_documents,
-    delete_embeddings,
-    get_document_chunks
+    search_similar_documents,
+    delete_document_embeddings
 )
+
+import chromadb
+from chromadb.config import Settings
+
 router = APIRouter(
     prefix="/rag",
     tags=["RAG"]
 )
 
+# ChromaDB
+client = chromadb.Client(
+    Settings(anonymized_telemetry=False)
+)
+
+collection = client.get_or_create_collection(
+    name="financial_documents"
+)
+
+
+# Semantic Search
 @router.post("/search")
 def semantic_search(query: str):
-    results = search_documents(query)
+
+    results = search_similar_documents(
+        query
+    )
+
     return {
         "query": query,
-        "results": results.get(
-            "documents",
-            []
-        )
+        "results": results
     }
-@router.delete("/remove-document/{document_id}")
-def remove_document(document_id: int):
-    delete_embeddings(document_id)
-    return {
-        "message": "Embeddings removed"
-    }
-@router.get("/context/{document_id}")
-def get_context(document_id: int):
 
-    chunks = get_document_chunks(
-        document_id
-    )
+
+# Get Context
+@router.get("/context/{document_id}")
+def get_document_context(
+    document_id: int
+):
+
+    results = collection.get()
+
+    chunks = []
+
+    for i, metadata in enumerate(
+        results["metadatas"]
+    ):
+
+        if metadata["document_id"] == document_id:
+
+            chunks.append({
+                "chunk": results["documents"][i],
+                "metadata": metadata
+            })
+
     return {
         "document_id": document_id,
         "chunks": chunks
+    }
+
+
+# Remove Embeddings
+@router.delete("/remove-document/{document_id}")
+def remove_document_embeddings(
+    document_id: int
+):
+
+    delete_document_embeddings(
+        document_id
+    )
+
+    return {
+        "message": "Document embeddings removed"
     }
